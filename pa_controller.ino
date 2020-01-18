@@ -3,10 +3,15 @@
 #include <TFT_eSPI.h>
 #include <ESP32CAN.h>
 #include <CAN_config.h>
+
+static lv_indev_t* encoder_indev; //The input device
+
+
 extern "C"{
   #include "main_ui.h"
 }
 #define LVGL_TICK_PERIOD 20
+
 
 /* Pins */
 const int tempPin = 12;
@@ -16,13 +21,30 @@ const int refPin  = 36;
 
 const int relay1  = 32;
 const int relay2  = 33;
+//
+//const int alarm_in  = 7;
+//const int alarm_out = 8;
 
-const int alarm_in  = 7;
-const int alarm_out = 8;
+const int rot_a     = 18;
+const int rot_b     = 19;
+const int but       = 21;
 
-const int rot_a     = 9;
-const int rot_b     = 10;
-const int but       = 11;
+
+/*Encoder*/
+
+
+ #include <MD_REncoder.h> // This library for rotary
+unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
+unsigned long debounceDelay = 50;    // the debounce time; increase if the output flickers
+int32_t RotaryCount = 0; //used to track rotary position
+
+
+#include <MD_UISwitch.h> //This library for button click (on the rotary)
+const uint8_t DIGITAL_SWITCH_ACTIVE = LOW;  // digital signal when switch is pressed 'on'
+
+int ButtonPressed = 0; //0 is not pressed, 1 is pressed
+MD_REncoder R = MD_REncoder(rot_a, rot_b);
+MD_UISwitch_Digital Switch(but, DIGITAL_SWITCH_ACTIVE);
 Ticker tick; /* timer for interrupt handler */
 TFT_eSPI tft = TFT_eSPI(); /* TFT instance */
 static lv_disp_buf_t disp_buf;
@@ -35,7 +57,7 @@ word outputvoltage = 4800; //variable for charger voltage setpoint, set startup 
 word outputcurrent = 255; //variable for charger current setpoint, set startup current to 25,5A (offset = 0,1)
 word overvoltage = 5050;
 
-unsigned char voltamp1[8] = {lowByte(outputcurrent), highByte(outputcurrent), lowByte(v_out), highByte(v_out), lowByte(v_out), highByte(v_out),lowByte(overvoltage), highByte(overvoltage)};
+unsigned char voltamp1[8] = {lowByte(outputcurrent), highByte(outputcurrent), lowByte(outputvoltage), highByte(outputvoltage), lowByte(outputvoltage), highByte(outputvoltage),lowByte(overvoltage), highByte(overvoltage)};
 
 
 unsigned char serialnr[8] = {0x12,0x35,0x71,0x10,0x16,0x79,0x00,0x00}; //Flatpack Serial
@@ -173,15 +195,37 @@ static void lv_tick_handler(void)
 /* Reading input device (simulated encoder here) */
 bool read_encoder(lv_indev_drv_t * indev, lv_indev_data_t * data)
 {
+  static int lastBtn;
   static int32_t last_diff = 0;
-  int32_t diff = 0; /* Dummy - no movement */
-  int btn_state = LV_INDEV_STATE_REL; /* Dummy - no press */
+
+  int32_t diff = RotaryCount;
+  int btn_state = 0;
+
+  if (ButtonPressed == 1) {
+    data->state = LV_INDEV_STATE_PR;
+    ButtonPressed = 0;
+  //  Serial.println("Button Pressed and Variable RESET to 0");
+  }
+  else
+  {
+    data->state = LV_INDEV_STATE_REL;
+  }
+
+  Serial.print("diff: ");
+  Serial.println(diff);
+
+  Serial.print("diff - last_diff: ");
+  Serial.println(diff - last_diff);
 
   data->enc_diff = diff - last_diff;;
-  data->state = btn_state;
-
+ 
   last_diff = diff;
 
+  if (lastBtn != btn_state)
+  {
+    lastBtn = btn_state;
+  }
+  Serial.println();
   return false;
 }
 
@@ -196,7 +240,9 @@ void setup() {
   ESP32Can.CANInit(); //start CAN Module
 
   delay(50);
-
+ R.begin();
+  Switch.begin();
+  Switch .enableDoublePress(false);
   lv_init();
 
 #if USE_LV_LOG != 0
@@ -223,18 +269,57 @@ void setup() {
   lv_indev_drv_init(&indev_drv);
   indev_drv.type = LV_INDEV_TYPE_ENCODER;
   indev_drv.read_cb = read_encoder;
-  lv_indev_drv_register(&indev_drv);
-
+  encoder_indev = lv_indev_drv_register(&indev_drv);
+  //Create Group for encoder
+  g = lv_group_create();
+  lv_indev_set_group(encoder_indev, g);
   /*Initialize the graphics library's tick*/
   tick.attach_ms(LVGL_TICK_PERIOD, lv_tick_handler);
-
+  
+  g = lv_group_create();
+  lv_indev_set_group(encoder_indev, g);
+  
   /* Create simple label */
- ui_create();
+ ui_create(g);
 }
 
 
 void loop() {
 
+  //**********************Rotary End***************
   lv_task_handler(); /* let the GUI do its work */
+  //**********************ClickButton Start*************
+
+  MD_UISwitch::keyResult_t k = Switch.read();
+
+  switch (k)
+  {
+    case MD_UISwitch::KEY_NULL:      /* Serial.print("KEY_NULL"); */  break;
+    case MD_UISwitch::KEY_UP:        /*Serial.print("\nKEY_UP "); */    break;
+    case MD_UISwitch::KEY_DOWN:     /* Serial.print("\n\nKEY_DOWN ");*/   break;
+    case MD_UISwitch::KEY_PRESS:     ButtonPressed = 1;  break; 
+    case MD_UISwitch::KEY_DPRESS:    Serial.println("KEY_DOUBLE "); break;
+    case MD_UISwitch::KEY_LONGPRESS: Serial.println("KEY_LONG   "); break;
+    case MD_UISwitch::KEY_RPTPRESS:  /*Serial.print("\nKEY_REPEAT ");*/ break;
+    default:                         /*Serial.print("\nKEY_UNKNWN ");*/ break;
+  }
+
+  //**********************ClickButton End***************
+   uint8_t x = R.read();
+  if (x)
+  {
+    if (x == DIR_CW ) {
+    //  Serial.print("NEXT ");
+      ++RotaryCount;
+    //  Serial.println(RotaryCount);
+    }
+    else
+    {
+     // Serial.print("PREV ");
+      --RotaryCount;
+      //Serial.println(RotaryCount);
+    }
+  }
+
   delay(5);
 }

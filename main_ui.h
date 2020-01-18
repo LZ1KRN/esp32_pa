@@ -28,11 +28,12 @@
 /**********************
  * GLOBAL PROTOTYPES
  **********************/
+lv_group_t *g;
 
 /**
  * Create main ui
  */
-void ui_create(void);
+void ui_create(lv_group_t* g);
 
 /**********************
  *      MACROS

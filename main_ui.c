@@ -25,7 +25,7 @@ static lv_obj_t *current_bar;
 static lv_obj_t *voltage_bar;
 static lv_obj_t *temp_bar;
 
-
+static lv_obj_t * close_btn;
 //
 
 static lv_obj_t *temp_label;
@@ -35,6 +35,7 @@ static lv_obj_t *paCurrent_label;
 
 
 
+//static lv_group_t* g; //An Object Group
 
 /**********************
  *  STATIC VARIABLES
@@ -47,10 +48,66 @@ static lv_obj_t *paCurrent_label;
 /**********************
  *   GLOBAL FUNCTIONS
  **********************/
-
-
-void ui_create(void)
+static void event_handler(lv_obj_t * obj, lv_event_t event)
 {
+   uint32_t id = lv_obj_get_user_data(obj);
+
+  
+    if(event == LV_EVENT_CLICKED) {
+        //printf("Clicked\n");
+        lv_ex_win_1();
+    }
+    else if(event == LV_EVENT_VALUE_CHANGED) {
+        printf("Toggled\n");
+    }
+}
+static void scr2_event_handler(lv_obj_t * obj, lv_event_t event)
+{
+    if(event == LV_EVENT_CLICKED) {
+        //printf("Clicked\n");
+        ui_settings_create();
+    }
+    else if(event == LV_EVENT_VALUE_CHANGED) {
+        printf("Toggled\n");
+    }
+}
+void lv_ex_win_1(void)
+{
+    /*Create a window*/
+    lv_obj_t * win = lv_win_create(lv_scr_act(), NULL);
+    lv_win_set_title(win, "Settings");                        /*Set the title*/
+
+    close_btn = lv_win_add_btn(win, LV_SYMBOL_CLOSE);           /*Add close button and use built-in close action*/
+    lv_group_add_obj (g, close_btn);
+
+    lv_obj_set_event_cb(close_btn, lv_win_close_event_cb);
+  //  lv_win_add_btn(win, LV_SYMBOL_SETTINGS);        /*Add a setup button*/
+
+    lv_obj_t * v_label = lv_label_create(win, NULL);
+    lv_label_set_text(v_label, "Eltek Voltage Offset");
+    lv_obj_t * v_spinbox;
+    v_spinbox = lv_spinbox_create(win, NULL);
+    lv_spinbox_set_digit_format(v_spinbox, 2, 2);
+    lv_spinbox_step_prev(v_spinbox);
+    lv_obj_set_width(v_spinbox, 100);
+    lv_group_add_obj (g, v_spinbox);
+    lv_obj_set_event_cb(v_spinbox, event_handler);
+    lv_obj_set_user_data(v_spinbox, 2);
+    lv_obj_set_pos (v_spinbox, 5, 30);
+    lv_obj_t * att_label = lv_label_create(win, NULL);
+    lv_label_set_text(att_label, "Alarm on ATT Overheat");
+    lv_obj_set_pos (att_label, 5, 60);
+    lv_obj_t *sw1 = lv_sw_create(win, NULL);
+    lv_sw_on(sw1, LV_ANIM_ON);
+    lv_obj_set_pos (sw1, 5, 80);
+    lv_group_add_obj (g, sw1);
+
+
+}
+
+void ui_create(lv_group_t* g)
+{
+     lv_obj_t * scr = lv_obj_create(NULL, NULL);
     lv_coord_t hres = lv_disp_get_hor_res(NULL);
     lv_coord_t vres = lv_disp_get_ver_res(NULL);
 
@@ -77,12 +134,12 @@ void ui_create(void)
 
  
   temp_label= lv_label_create (lv_scr_act (), NULL);
-  lv_label_set_text (temp_label, "Temp: 22 C");
+  lv_label_set_text (temp_label, "Temp: -- C");
   lv_obj_set_pos (temp_label, 5, 5);
   
   // SWR Label
   swr_label= lv_label_create (lv_scr_act (), NULL);
-  lv_label_set_text (swr_label, "SWR: 1.2 ");
+  lv_label_set_text (swr_label, "SWR: -.- ");
   lv_obj_set_pos (swr_label, 244, 5);
   
   //
@@ -111,7 +168,7 @@ void ui_create(void)
   lv_obj_t * fwdStatic_label = lv_label_create(lv_scr_act(), NULL);
   lv_label_set_recolor(fwdStatic_label, true);                      /*Enable re-coloring by commands in the text*/
   lv_label_set_align(fwdStatic_label, LV_LABEL_ALIGN_CENTER);       /*Center aligned lines*/
-  lv_label_set_text(fwdStatic_label, "#66cd00 FWD: 500W#");
+  lv_label_set_text(fwdStatic_label, "#66cd00 FWD: ---W#");
   lv_obj_set_width(fwdStatic_label, 150);
   lv_obj_set_pos (fwdStatic_label, 5, 30);
 
@@ -120,7 +177,7 @@ void ui_create(void)
   lv_obj_t * refStatic_label = lv_label_create(lv_scr_act(), NULL);
   lv_label_set_recolor(refStatic_label, true);                      /*Enable re-coloring by commands in the text*/
   lv_label_set_align(refStatic_label, LV_LABEL_ALIGN_CENTER);       /*Center aligned lines*/
-  lv_label_set_text(refStatic_label, "#e70100 REF: 100W#");
+  lv_label_set_text(refStatic_label, "#e70100 REF: ---W#");
   lv_obj_set_width(refStatic_label, 150);
   lv_obj_set_pos (refStatic_label, 160, 30);
 
@@ -145,7 +202,7 @@ void ui_create(void)
   lv_obj_t * currentStatic_label = lv_label_create(lv_scr_act(), NULL);
   lv_label_set_recolor(currentStatic_label, true);                      /*Enable re-coloring by commands in the text*/
   lv_label_set_align(currentStatic_label, LV_LABEL_ALIGN_CENTER);       /*Center aligned lines*/
-  lv_label_set_text(currentStatic_label, "#e6e700 Current: 22A#");
+  lv_label_set_text(currentStatic_label, "#e6e700 Current: --A#");
   lv_obj_set_width(currentStatic_label, 140);
   lv_obj_set_pos (currentStatic_label, 120, 80);
 
@@ -162,7 +219,7 @@ void ui_create(void)
   lv_obj_t * voltageStatic_label = lv_label_create(lv_scr_act(), NULL);
   lv_label_set_recolor(voltageStatic_label, true);                      /*Enable re-coloring by commands in the text*/
   lv_label_set_align(voltageStatic_label, LV_LABEL_ALIGN_CENTER);       /*Center aligned lines*/
-  lv_label_set_text(voltageStatic_label, "#e77500 Voltage: 47V#");
+  lv_label_set_text(voltageStatic_label, "#e77500 Voltage: --V#");
   lv_obj_set_width(voltageStatic_label, 140);
   lv_obj_set_pos (voltageStatic_label, 120, 130);
 
@@ -181,20 +238,26 @@ void ui_create(void)
   lv_label_set_text(ptt_label, "PTT");
   lv_obj_set_pos (ptt, 5, 180);
   lv_obj_set_size (ptt, 100, 50);
+  lv_group_add_obj (g, ptt);
+
 //
   lv_obj_t * alarm_label;
   lv_obj_t * alarm = lv_btn_create(lv_scr_act(), NULL);
   alarm_label = lv_label_create(alarm, NULL);
-  lv_label_set_text(alarm_label, "ALARM");
+  lv_label_set_text(alarm_label, "NO ALRM");
   lv_obj_set_pos (alarm, 110, 180);
   lv_obj_set_size (alarm, 100, 50);
+  lv_group_add_obj (g, alarm);
+
   //
   lv_obj_t * oper_label;
   lv_obj_t * oper = lv_btn_create(lv_scr_act(), NULL);
   oper_label = lv_label_create(oper, NULL);
-  lv_label_set_text(oper_label, "OPER");
+  lv_label_set_text(oper_label, "SET");
   lv_obj_set_pos (oper, 215, 180);
   lv_obj_set_size (oper, 100, 50);
+  lv_group_add_obj (g, oper);
+  lv_obj_set_event_cb(oper, event_handler);
 
 /*
 
